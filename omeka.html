@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omeka S - Gestion des items</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #fff; color: #222; }
+        h1, h2 { color: #2c3e50; font-weight: normal; }
+        ul { list-style: none; padding: 0; }
+        li { margin: 8px 0; padding: 10px; background: #f4f4f4; border-radius: 5px; }
+        button { margin-left: 10px; padding: 5px 10px; cursor: pointer; border: 1px solid #aaa; border-radius: 4px; background: #fff; }
+        button:hover { background: #eaeaea; }
+        select, input, textarea { width: 100%; margin: 6px 0; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .form { margin-top: 25px; padding: 15px; background: #eef2ff; border-radius: 6px; }
+        #resultCrea { margin-top: 10px; color: #2c3e50; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Omeka S - Gestion des items</h1>
+
+    <h2>Resource Templates</h2>
+    <select id="templates">
+        <option value="">Sélectionner un template</option>
+    </select>
+
+    <h2>Liste des items</h2>
+    <ul id="listeItems"></ul>
+
+    <div class="form">
+        <h2>Créer un nouvel item</h2>
+        <label for="titre">Titre :</label>
+        <input type="text" id="titre" placeholder="Titre de l’item">
+
+        <label for="desc">Description :</label>
+        <textarea id="desc" rows="3" placeholder="Description de l’item"></textarea>
+
+        <button id="ajouter">Créer</button>
+    </div>
+
+    <p id="resultCrea"></p>
+
+    <script type="module">
+        import { auth } from './modules/auth.js';
+        import { pa } from './modules/authParams.js';
+
+        const a = new auth(pa);
+        a.getUser(u => console.log("Utilisateur connecté :", u));
+
+        const urlItems = "http://localhost/omeka-s/api/items";
+        const urlTemplates = "http://localhost/omeka-s/api/resource_templates";
+
+        // Charger les templates
+        d3.json(urlTemplates).then(templates => {
+            const select = d3.select('#templates');
+            templates.forEach(t => {
+                select.append('option')
+                    .attr('value', t['o:id'])
+                    .text(t['o:title']);
+            });
+        });
+
+        // Charger la liste des items
+        function loadItems() {
+            d3.json(urlItems).then(data => {
+                const liste = d3.select('#listeItems');
+                liste.selectAll('li').remove();
+
+                const items = liste.selectAll('li')
+                    .data(data)
+                    .enter()
+                    .append('li');
+
+                items.append('span')
+                    .text(d => d['o:title'] || '(sans titre)');
+
+                items.append('button')
+                    .text('Supprimer')
+                    .on('click', supprimerItem);
+            });
+        }
+        loadItems();
+
+        // Création d’un item
+        document.getElementById('ajouter').addEventListener('click', () => {
+            const titre = document.getElementById('titre').value.trim();
+            const desc = document.getElementById('desc').value.trim();
+            const templateId = document.getElementById('templates').value;
+
+            if (!titre) return alert("Le titre est obligatoire.");
+            if (!templateId) return alert("Veuillez choisir un template.");
+
+            const data = {
+                'o:resource_class': { 'o:id': 94 }, // adapter selon ta classe
+                'o:resource_template': { 'o:id': parseInt(templateId) },
+                'dcterms:title': [{ '@value': titre, '@language': 'fr' }],
+                'dcterms:description': [{ '@value': desc, '@language': 'fr' }]
+            };
+
+            a.omk.createItem(data, i => {
+                document.getElementById('resultCrea').textContent = 
+                    "Item créé : " + (i['o:title'] || 'sans titre');
+                loadItems();
+            });
+        });
+
+        // Suppression d’un item
+        function supprimerItem(e, d) {
+            if (confirm(`Supprimer "${d['o:title']}" ?`)) {
+                a.omk.deleteItem(d['o:id'], res => {
+                    alert("Item supprimé !");
+                    loadItems();
+                });
+            }
+        }
+    </script>
+</body>
+</html>
