@@ -1,119 +1,96 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Omeka S - Gestion des items</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 30px; background-color: #fff; color: #222; }
-        h1, h2 { color: #2c3e50; font-weight: normal; }
-        ul { list-style: none; padding: 0; }
-        li { margin: 8px 0; padding: 10px; background: #f4f4f4; border-radius: 5px; }
-        button { margin-left: 10px; padding: 5px 10px; cursor: pointer; border: 1px solid #aaa; border-radius: 4px; background: #fff; }
-        button:hover { background: #eaeaea; }
-        select, input, textarea { width: 100%; margin: 6px 0; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        .form { margin-top: 25px; padding: 15px; background: #eef2ff; border-radius: 6px; }
-        #resultCrea { margin-top: 10px; color: #2c3e50; white-space: pre-wrap; }
-    </style>
+  <meta charset="UTF-8">
+  <title>apiOmk – Lire et ajouter items</title>
 </head>
 <body>
-    <h1>Omeka S - Gestion des items</h1>
+  <h1>Lecture des items</h1>
+  <button id="loadItems">Charger les items</button>
+  <ul id="itemsList"></ul>
 
-    <h2>Resource Templates</h2>
-    <select id="templates">
-        <option value="">Sélectionner un template</option>
-    </select>
+  <h1>Ajouter un item</h1>
+  <form id="addItemForm">
+    <label>
+      Titre :
+      <input type="text" name="title" required>
+    </label><br>
+    <label>
+      Description :
+      <textarea name="description"></textarea>
+    </label><br>
+    <button type="submit">Ajouter l’item</button>
+  </form>
 
-    <h2>Liste des items</h2>
-    <ul id="listeItems"></ul>
+  <script>
+    // Adapter ces valeurs selon ton serveur
+    const API_BASE = 'http://localhost/omeka-s/api/items'; 
+    const API_KEY = 'eokj9cPklu944ExreabyjuyBok7yfLr3';
+    const KEY_CREDENTIAL = "WVOJ1wvbmLicqXC82dHxQ4VGE47chxbo";
 
-    <div class="form">
-        <h2>Créer un nouvel item</h2>
-        <label for="titre">Titre :</label>
-        <input type="text" id="titre" placeholder="Titre de l’item">
-
-        <label for="desc">Description :</label>
-        <textarea id="desc" rows="3" placeholder="Description de l’item"></textarea>
-
-        <button id="ajouter">Créer</button>
-    </div>
-
-    <p id="resultCrea"></p>
-
-    <script type="module">
-        import { auth } from './modules/auth.js';
-        import { pa } from './modules/authParams.js';
-
-        const a = new auth(pa);
-        a.getUser(u => console.log("Utilisateur connecté :", u));
-
-        const urlItems = "http://localhost/omeka-s/api/items";
-        const urlTemplates = "http://localhost/omeka-s/api/resource_templates";
-
-        // Charger les templates
-        d3.json(urlTemplates).then(templates => {
-            const select = d3.select('#templates');
-            templates.forEach(t => {
-                select.append('option')
-                    .attr('value', t['o:id'])
-                    .text(t['o:title']);
-            });
+    // Fonction pour charger les items
+    async function loadItems() {
+      const url = `${API_BASE}/items?apikey=${API_KEY}`;
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Erreur chargement');
+        const data = await resp.json();
+        const list = document.getElementById('itemsList');
+        list.innerHTML = '';
+        data.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = `#${item.id} – ${item.title || '(sans titre)'}`;
+          list.appendChild(li);
         });
+      } catch (err) {
+        alert('Erreur : ' + err.message);
+      }
+    }
 
-        // Charger la liste des items
-        function loadItems() {
-            d3.json(urlItems).then(data => {
-                const liste = d3.select('#listeItems');
-                liste.selectAll('li').remove();
+    // Fonction pour ajouter un item
+    async function addItem(event) {
+      event.preventDefault();
+      const form = event.target;
+      const title = form.title.value;
+      const description = form.description.value;
 
-                const items = liste.selectAll('li')
-                    .data(data)
-                    .enter()
-                    .append('li');
-
-                items.append('span')
-                    .text(d => d['o:title'] || '(sans titre)');
-
-                items.append('button')
-                    .text('Supprimer')
-                    .on('click', supprimerItem);
-            });
-        }
-        loadItems();
-
-        // Création d’un item
-        document.getElementById('ajouter').addEventListener('click', () => {
-            const titre = document.getElementById('titre').value.trim();
-            const desc = document.getElementById('desc').value.trim();
-            const templateId = document.getElementById('templates').value;
-
-            if (!titre) return alert("Le titre est obligatoire.");
-            if (!templateId) return alert("Veuillez choisir un template.");
-
-            const data = {
-                'o:resource_class': { 'o:id': 94 }, // adapter selon ta classe
-                'o:resource_template': { 'o:id': parseInt(templateId) },
-                'dcterms:title': [{ '@value': titre, '@language': 'fr' }],
-                'dcterms:description': [{ '@value': desc, '@language': 'fr' }]
-            };
-
-            a.omk.createItem(data, i => {
-                document.getElementById('resultCrea').textContent = 
-                    "Item créé : " + (i['o:title'] || 'sans titre');
-                loadItems();
-            });
-        });
-
-        // Suppression d’un item
-        function supprimerItem(e, d) {
-            if (confirm(`Supprimer "${d['o:title']}" ?`)) {
-                a.omk.deleteItem(d['o:id'], res => {
-                    alert("Item supprimé !");
-                    loadItems();
-                });
+      const payload = {
+        item: {
+          title: title,
+          resource_template_id: 1,        // adapter selon ton modèle
+          // autres champs si besoin...
+          // Exemple pour Omeka S : values : [...]
+          values: [
+            {
+              property_id: 12,             // description property_id
+              "@value": description
             }
+          ]
         }
-    </script>
+      };
+
+      try {
+        const resp = await fetch(`${API_BASE}/items?apikey=${API_KEY}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) throw new Error('Erreur ajout item');
+        const result = await resp.json();
+        alert('Item ajouté avec id : ' + result.id);
+        loadItems();  // recharger
+      } catch (err) {
+        alert('Erreur : ' + err.message);
+      }
+    }
+
+    document.getElementById('loadItems').addEventListener('click', loadItems);
+    document.getElementById('addItemForm').addEventListener('submit', addItem);
+
+    // Charger au démarrage
+    // loadItems();
+  </script>
 </body>
 </html>
